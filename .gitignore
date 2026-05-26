@@ -1,0 +1,28 @@
+# Python virtual environment
+.venv/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Test and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local Codex/agent workspace files
+.agents/
+.codex/
+
+# Generated invoice outputs
+generated_invoices/
+generated_invoices_5/
+tmp_smoke/
+tmp_smoke_v2/
+tmp_smoke_v3/
+tmp_pdf_smoke/
+tmp_pdf_smoke2/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
