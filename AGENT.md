@@ -7,6 +7,7 @@ This repo contains a single Python batch document generator for Slovak advance i
 Primary script:
 
 - [scripts/bulk_zalohova_faktura_generator.py](/home/disane/Development/AccountingAutomation/invoice_generator/scripts/bulk_zalohova_faktura_generator.py)
+- [scripts/generate_tatra_bank_statement.py](/home/disane/Development/AccountingAutomation/invoice_generator/scripts/generate_tatra_bank_statement.py)
 
 Primary template:
 
@@ -32,6 +33,7 @@ Primary template:
 - Validate behavior with a small batch before assuming a 1000-document run is safe.
 - Keep README examples aligned with the actual CLI behavior in the script.
 - Keep manifest field names aligned with the downstream accounting automation flow, especially `customer_id`, `billing_month`, `variable_symbol`, and `expected_amount`.
+- Keep the bank-statement transaction fields aligned with the downstream normalized import shape, especially `transaction_id`, `direction`, `reference_text`, `variable_symbol`, and `counterparty_iban`.
 
 ## Important Behavioral Notes
 
@@ -42,6 +44,8 @@ Primary template:
 - Every run writes `manifests/invoices.csv`, `manifests/invoices.json`, `manifests/customers.csv`, and `manifests/customers.json`.
 - For a 1000-row batch, the amount distribution is `300x80`, `300x180`, `250x210`, and `150` random whole-EUR amounts.
 - Payment scenarios are encoded into manifests as `exact_single`, `exact_split_total`, `underpay`, and `overpay`.
+- `generate_tatra_bank_statement.py` reads `manifests/invoices.csv` and writes `transactions.csv`, `statement.ofx`, expectations files, and `summary.json`.
+- The bank generator injects deterministic duplicate-payment and noise transactions to exercise reconciliation edge cases.
 
 ## Useful Commands
 
@@ -65,4 +69,13 @@ Run the unit tests:
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v
+```
+
+Generate a bank statement from an invoice manifest:
+
+```bash
+.venv/bin/python scripts/generate_tatra_bank_statement.py \
+  --invoices generated_invoices/manifests/invoices.csv \
+  --outdir generated_invoices/bank_statement \
+  --seed 42
 ```

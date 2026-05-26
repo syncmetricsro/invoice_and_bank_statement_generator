@@ -9,6 +9,7 @@ The project currently generates:
 - QR code images embedded into each generated document
 - Invoice manifests in `CSV` and `JSON`
 - Customer manifests in `CSV` and `JSON`
+- Deterministic Tatra-style bank statement test data from `invoices.csv`
 
 ## Requirements
 
@@ -88,6 +89,15 @@ Optional compatibility note:
 
 `--soffice` is now ignored. It remains accepted only so older command examples do not break.
 
+Generate a Tatra-style statement from an invoice manifest:
+
+```bash
+.venv/bin/python scripts/generate_tatra_bank_statement.py \
+  --invoices generated_invoices/manifests/invoices.csv \
+  --outdir generated_invoices/bank_statement \
+  --seed 42
+```
+
 ## Customer CSV
 
 Use `--customers-csv` to supply real customer records instead of generated sample customers.
@@ -154,6 +164,7 @@ invoice_generator/
 - `--pdf` now generates parsable text PDFs directly from Python without LibreOffice.
 - The QR payload is test text, not a Slovak `PAY by square` implementation.
 - `invoices.csv` is the primary downstream flat export for later Tatra transaction generation.
+- `generate_tatra_bank_statement.py` reads `invoices.csv` and emits `transactions.csv`, `statement.ofx`, expectations files, and `summary.json`.
 
 ## Verification
 

@@ -17,11 +17,13 @@ __pycache__/
 # Generated invoice outputs
 generated_invoices/
 generated_invoices_5/
+bank_statement_*/
 tmp_smoke/
 tmp_smoke_v2/
 tmp_smoke_v3/
 tmp_pdf_smoke/
 tmp_pdf_smoke2/
+tmp_bank_smoke/
 
 # OS/editor noise
 .DS_Store

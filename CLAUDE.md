@@ -8,8 +8,9 @@ This is a Python invoice batch generator centered around a DOCX template and opt
 
 1. Activate the environment: `source .venv/bin/activate`
 2. Main script: [scripts/bulk_zalohova_faktura_generator.py](/home/disane/Development/AccountingAutomation/invoice_generator/scripts/bulk_zalohova_faktura_generator.py)
-3. Template: [docs/zalohova_faktura_template_ready.docx](/home/disane/Development/AccountingAutomation/invoice_generator/docs/zalohova_faktura_template_ready.docx)
-4. Install packages with: `pip install -r requirements.txt`
+3. Bank statement script: [scripts/generate_tatra_bank_statement.py](/home/disane/Development/AccountingAutomation/invoice_generator/scripts/generate_tatra_bank_statement.py)
+4. Template: [docs/zalohova_faktura_template_ready.docx](/home/disane/Development/AccountingAutomation/invoice_generator/docs/zalohova_faktura_template_ready.docx)
+5. Install packages with: `pip install -r requirements.txt`
 
 ## Commands
 
@@ -40,6 +41,15 @@ Run with PDF conversion:
   --pdf
 ```
 
+Generate a Tatra-style statement from an invoice manifest:
+
+```bash
+.venv/bin/python scripts/generate_tatra_bank_statement.py \
+  --invoices generated_invoices/manifests/invoices.csv \
+  --outdir generated_invoices/bank_statement \
+  --seed 42
+```
+
 ## Implementation Notes
 
 - The generator creates synthetic customer data when `--customers-csv` is omitted.
@@ -50,6 +60,8 @@ Run with PDF conversion:
 - Sidecar manifests are always written to `outdir/manifests/`.
 - For a 1000-row batch, amount buckets are `80`, `180`, `210`, and random whole-EUR values.
 - Manifest rows include reconciliation metadata such as `payment_scenario`, `suggested_received_amount`, and `suggested_split_amounts`.
+- `generate_tatra_bank_statement.py` reads `manifests/invoices.csv` and writes `transactions.csv`, `statement.ofx`, expectations files, and `summary.json`.
+- The statement generator adds deterministic duplicates and controlled noise credits/debits for reconciliation testing.
 
 ## Constraints
 
