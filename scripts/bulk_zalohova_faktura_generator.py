@@ -39,6 +39,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import HRFlowable
 from reportlab.platypus import Image as PdfImage
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table as PdfTable, TableStyle
 
@@ -348,6 +349,14 @@ PDF_FONT_CANDIDATES = [
     ),
 ]
 
+# PDF palette — restrained navy accent on near-black ink, light panels.
+PDF_INK = colors.HexColor("#16212E")
+PDF_MUTED = colors.HexColor("#5B6B7C")
+PDF_ACCENT = colors.HexColor("#1E3A5F")
+PDF_ACCENT_TINT = colors.HexColor("#C9D6E5")
+PDF_PANEL = colors.HexColor("#F2F5F9")
+PDF_RULE = colors.HexColor("#D8DFE7")
+
 
 @lru_cache(maxsize=1)
 def get_pdf_fonts() -> tuple[str, str]:
@@ -371,29 +380,33 @@ def get_pdf_styles() -> dict[str, ParagraphStyle]:
             "body",
             fontName=regular_font,
             fontSize=9,
-            leading=11,
+            leading=12,
             alignment=TA_LEFT,
+            textColor=PDF_INK,
         ),
         "body_right": ParagraphStyle(
             "body_right",
             fontName=regular_font,
             fontSize=9,
-            leading=11,
+            leading=12,
             alignment=TA_RIGHT,
+            textColor=PDF_INK,
         ),
         "body_center": ParagraphStyle(
             "body_center",
             fontName=regular_font,
             fontSize=9,
-            leading=11,
+            leading=12,
             alignment=TA_CENTER,
+            textColor=PDF_INK,
         ),
         "small": ParagraphStyle(
             "small",
             fontName=regular_font,
             fontSize=8,
-            leading=10,
+            leading=10.5,
             alignment=TA_LEFT,
+            textColor=PDF_INK,
         ),
         "label": ParagraphStyle(
             "label",
@@ -406,9 +419,10 @@ def get_pdf_styles() -> dict[str, ParagraphStyle]:
         "title": ParagraphStyle(
             "title",
             fontName=bold_font,
-            fontSize=18,
-            leading=22,
+            fontSize=19,
+            leading=23,
             alignment=TA_LEFT,
+            textColor=PDF_INK,
         ),
         "heading": ParagraphStyle(
             "heading",
@@ -416,6 +430,7 @@ def get_pdf_styles() -> dict[str, ParagraphStyle]:
             fontSize=10,
             leading=12,
             alignment=TA_LEFT,
+            textColor=PDF_INK,
         ),
         "heading_center": ParagraphStyle(
             "heading_center",
@@ -423,6 +438,7 @@ def get_pdf_styles() -> dict[str, ParagraphStyle]:
             fontSize=10,
             leading=12,
             alignment=TA_CENTER,
+            textColor=PDF_INK,
         ),
         "value_emphasis": ParagraphStyle(
             "value_emphasis",
@@ -430,6 +446,136 @@ def get_pdf_styles() -> dict[str, ParagraphStyle]:
             fontSize=11,
             leading=13,
             alignment=TA_RIGHT,
+            textColor=PDF_INK,
+        ),
+        # --- redesigned-layout styles ---
+        "doc_no_main": ParagraphStyle(
+            "doc_no_main",
+            fontName=bold_font,
+            fontSize=12.5,
+            leading=16,
+            alignment=TA_RIGHT,
+            textColor=colors.white,
+        ),
+        "doc_no_sub": ParagraphStyle(
+            "doc_no_sub",
+            fontName=regular_font,
+            fontSize=9.5,
+            leading=13,
+            alignment=TA_RIGHT,
+            textColor=PDF_ACCENT_TINT,
+        ),
+        "meta_label": ParagraphStyle(
+            "meta_label",
+            fontName=bold_font,
+            fontSize=7.5,
+            leading=10,
+            alignment=TA_LEFT,
+            textColor=PDF_MUTED,
+        ),
+        "meta_value": ParagraphStyle(
+            "meta_value",
+            fontName=bold_font,
+            fontSize=9.5,
+            leading=12,
+            alignment=TA_LEFT,
+            textColor=PDF_INK,
+        ),
+        "section_label": ParagraphStyle(
+            "section_label",
+            fontName=bold_font,
+            fontSize=8.5,
+            leading=11,
+            alignment=TA_LEFT,
+            textColor=PDF_MUTED,
+        ),
+        "party_name": ParagraphStyle(
+            "party_name",
+            fontName=bold_font,
+            fontSize=10,
+            leading=13,
+            alignment=TA_LEFT,
+            textColor=PDF_INK,
+        ),
+        "party_line": ParagraphStyle(
+            "party_line",
+            fontName=regular_font,
+            fontSize=8.5,
+            leading=11.5,
+            alignment=TA_LEFT,
+            textColor=PDF_INK,
+        ),
+        "th_left": ParagraphStyle(
+            "th_left",
+            fontName=bold_font,
+            fontSize=8.5,
+            leading=11,
+            alignment=TA_LEFT,
+            textColor=colors.white,
+        ),
+        "th_center": ParagraphStyle(
+            "th_center",
+            fontName=bold_font,
+            fontSize=8.5,
+            leading=11,
+            alignment=TA_CENTER,
+            textColor=colors.white,
+        ),
+        "th_right": ParagraphStyle(
+            "th_right",
+            fontName=bold_font,
+            fontSize=8.5,
+            leading=11,
+            alignment=TA_RIGHT,
+            textColor=colors.white,
+        ),
+        "total_label": ParagraphStyle(
+            "total_label",
+            fontName=bold_font,
+            fontSize=9.5,
+            leading=12,
+            alignment=TA_LEFT,
+            textColor=PDF_INK,
+        ),
+        "total_value": ParagraphStyle(
+            "total_value",
+            fontName=bold_font,
+            fontSize=10,
+            leading=13,
+            alignment=TA_RIGHT,
+            textColor=PDF_INK,
+        ),
+        "grand_label": ParagraphStyle(
+            "grand_label",
+            fontName=bold_font,
+            fontSize=10,
+            leading=13,
+            alignment=TA_LEFT,
+            textColor=colors.white,
+        ),
+        "grand_value": ParagraphStyle(
+            "grand_value",
+            fontName=bold_font,
+            fontSize=12,
+            leading=15,
+            alignment=TA_RIGHT,
+            textColor=colors.white,
+        ),
+        "words_line": ParagraphStyle(
+            "words_line",
+            fontName=regular_font,
+            fontSize=8,
+            leading=11,
+            alignment=TA_RIGHT,
+            textColor=PDF_MUTED,
+        ),
+        "note_text": ParagraphStyle(
+            "note_text",
+            fontName=regular_font,
+            fontSize=8.5,
+            leading=12,
+            alignment=TA_LEFT,
+            textColor=PDF_INK,
         ),
     }
 
@@ -490,6 +636,54 @@ def party_block(title: str, party: Party, *, include_vat: bool) -> Paragraph:
     return pdf_markup("<br/>".join(markup_lines), "body")
 
 
+def party_groups(party: Party, *, include_vat: bool) -> list[list[str]]:
+    # Same line texts as party_lines (minus the name), grouped so the PDF
+    # can add breathing room between address / registry IDs / contact / bank.
+    address = [party.street, party.city_country]
+    if party.register:
+        address.append(party.register)
+
+    ids: list[str] = []
+    if party.ico:
+        ids.append(f"IČO: {party.ico}")
+    if party.dic:
+        ids.append(f"DIČ: {party.dic}")
+    if party.ic_dph:
+        ids.append(f"IČ DPH: {party.ic_dph}")
+    if include_vat:
+        ids.append(f"Platiteľ DPH: {party.vat_payer}")
+
+    contact: list[str] = []
+    if party.contact:
+        contact.append(party.contact)
+    if party.phone:
+        contact.append(f"Telefón: {party.phone}")
+    if party.email:
+        contact.append(f"Email: {party.email}")
+    if party.web:
+        contact.append(f"Web: {party.web}")
+
+    bank: list[str] = []
+    if party.iban:
+        bank.append(f"IBAN: {party.iban}")
+    if party.swift:
+        bank.append(f"SWIFT: {party.swift}")
+    if party.bank_account:
+        bank.append(f"Banka / účet: {party.bank_account}")
+
+    return [group for group in (address, ids, contact, bank) if group]
+
+
+def party_cell(party: Party, *, include_vat: bool) -> list[Any]:
+    flowables: list[Any] = [pdf_paragraph(party.name, "party_name"), Spacer(1, 2 * mm)]
+    groups = party_groups(party, include_vat=include_vat)
+    for index, group in enumerate(groups):
+        if index > 0:
+            flowables.append(Spacer(1, 2 * mm))
+        flowables.append(pdf_multiline(group, "party_line"))
+    return flowables
+
+
 def labeled_value(label: str, value: str) -> Paragraph:
     styles = get_pdf_styles()
     safe_label = escape(label)
@@ -498,76 +692,86 @@ def labeled_value(label: str, value: str) -> Paragraph:
 
 
 def build_pdf_story(inv: InvoiceData, qr_png_path: Path) -> list[Any]:
-    styles = get_pdf_styles()
     story: list[Any] = []
 
+    # Header: big title left, navy document-number block right, accent rule.
+    doc_no_cell = [
+        pdf_paragraph(f"ZF / {inv.invoice_no}", "doc_no_main"),
+        pdf_paragraph(f"VS: {inv.variable_symbol}", "doc_no_sub"),
+    ]
     header = PdfTable(
-        [[
-            pdf_paragraph("ZÁLOHOVÁ FAKTÚRA", "title"),
-            pdf_markup(f"ZF / {escape(inv.invoice_no)}<br/>VS: {escape(inv.variable_symbol)}", "heading_center"),
-        ]],
-        colWidths=[115 * mm, 60 * mm],
+        [[pdf_paragraph("ZÁLOHOVÁ FAKTÚRA", "title"), doc_no_cell]],
+        colWidths=[112 * mm, 64 * mm],
     )
     header.setStyle(TableStyle([
-        ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#E2E8F0")),
-        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#94A3B8")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+        ("BACKGROUND", (1, 0), (1, 0), PDF_ACCENT),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("LEFTPADDING", (1, 0), (1, 0), 10),
+        ("RIGHTPADDING", (1, 0), (1, 0), 10),
         ("TOPPADDING", (0, 0), (-1, -1), 8),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
     story.append(header)
-    story.append(Spacer(1, 6 * mm))
+    story.append(HRFlowable(width="100%", thickness=1.4, color=PDF_ACCENT, spaceBefore=3, spaceAfter=0))
+    story.append(Spacer(1, 5 * mm))
+
+    # Meta strip: label-over-value columns on a light panel, no grid.
+    def meta_cell(label: str, value: str) -> list[Any]:
+        return [pdf_paragraph(label, "meta_label"), pdf_paragraph(value, "meta_value")]
 
     meta = PdfTable(
         [[
-            labeled_value("Forma úhrady:", "peňažný prevod"),
-            labeled_value("Variabilný symbol:", inv.variable_symbol),
-            labeled_value("Dátum vystavenia:", date_sk(inv.issue_date)),
-            labeled_value("Dátum splatnosti:", date_sk(inv.due_date)),
+            meta_cell("Forma úhrady:", "peňažný prevod"),
+            meta_cell("Variabilný symbol:", inv.variable_symbol),
+            meta_cell("Dátum vystavenia:", date_sk(inv.issue_date)),
+            meta_cell("Dátum splatnosti:", date_sk(inv.due_date)),
         ]],
-        colWidths=[46 * mm, 46 * mm, 42 * mm, 42 * mm],
+        colWidths=[44 * mm, 44 * mm, 44 * mm, 44 * mm],
     )
     meta.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#CBD5E1")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ("BACKGROUND", (0, 0), (-1, -1), PDF_PANEL),
+        ("LINEBEFORE", (1, 0), (-1, -1), 0.6, PDF_RULE),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
     story.append(meta)
     story.append(Spacer(1, 6 * mm))
 
-    supplier_block = party_block("Dodávateľ", inv.supplier, include_vat=True)
-    customer_block = party_block("Odberateľ", inv.customer, include_vat=False)
+    # Parties: two open columns with underlined section labels — no boxes.
     parties = PdfTable(
-        [[supplier_block, customer_block]],
-        colWidths=[87 * mm, 87 * mm],
+        [
+            [pdf_paragraph("Dodávateľ", "section_label"), "", pdf_paragraph("Odberateľ", "section_label")],
+            [party_cell(inv.supplier, include_vat=True), "", party_cell(inv.customer, include_vat=False)],
+        ],
+        colWidths=[84 * mm, 8 * mm, 84 * mm],
     )
     parties.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#94A3B8")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+        ("LINEBELOW", (0, 0), (0, 0), 0.9, PDF_ACCENT),
+        ("LINEBELOW", (2, 0), (2, 0), 0.9, PDF_ACCENT),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, 0), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 3),
+        ("TOPPADDING", (0, 1), (-1, 1), 4),
+        ("BOTTOMPADDING", (0, 1), (-1, 1), 0),
     ]))
     story.append(parties)
-    story.append(Spacer(1, 6 * mm))
+    story.append(Spacer(1, 7 * mm))
 
+    # Items: dark header band, right-aligned numbers, horizontal rules only.
     items = PdfTable(
         [
             [
-                pdf_paragraph("Popis položky", "heading"),
-                pdf_paragraph("Množstvo", "heading_center"),
-                pdf_paragraph("MJ", "heading_center"),
-                pdf_paragraph("Cena za MJ", "heading_center"),
-                pdf_paragraph("Celková cena", "heading_center"),
+                pdf_paragraph("Popis položky", "th_left"),
+                pdf_paragraph("Množstvo", "th_center"),
+                pdf_paragraph("MJ", "th_center"),
+                pdf_paragraph("Cena za MJ", "th_right"),
+                pdf_paragraph("Celková cena", "th_right"),
             ],
             [
                 pdf_paragraph(inv.item_description, "body"),
@@ -577,81 +781,100 @@ def build_pdf_story(inv: InvoiceData, qr_png_path: Path) -> list[Any]:
                 pdf_paragraph(money_eur(inv.total), "body_right"),
             ],
         ],
-        colWidths=[78 * mm, 20 * mm, 16 * mm, 31 * mm, 31 * mm],
+        colWidths=[76 * mm, 24 * mm, 14 * mm, 30 * mm, 32 * mm],
         repeatRows=1,
     )
     items.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#94A3B8")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E2E8F0")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("BACKGROUND", (0, 0), (-1, 0), PDF_ACCENT),
+        ("LINEBELOW", (0, 1), (-1, 1), 0.6, PDF_RULE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, 0), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 5),
+        ("TOPPADDING", (0, 1), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 7),
     ]))
     story.append(items)
-    story.append(Spacer(1, 5 * mm))
+    story.append(Spacer(1, 6 * mm))
 
+    # Totals: compact right-aligned block, grand total on the accent band;
+    # the amount in words gets a full-width line so it never wraps cramped.
     totals = PdfTable(
         [
-            [pdf_paragraph("Spolu:", "heading"), pdf_paragraph(money_eur(inv.total), "value_emphasis")],
-            [pdf_paragraph("K úhrade / zostáva uhradiť:", "heading"), pdf_paragraph(money_eur(inv.total), "value_emphasis")],
-            [pdf_paragraph("Slovom:", "heading"), pdf_paragraph(amount_in_words_sk(inv.total), "small")],
+            [pdf_paragraph("Spolu:", "total_label"), pdf_paragraph(money_eur(inv.total), "total_value")],
+            [
+                pdf_paragraph("K úhrade / zostáva uhradiť:", "grand_label"),
+                pdf_paragraph(money_eur(inv.total), "grand_value"),
+            ],
         ],
-        colWidths=[72 * mm, 40 * mm],
+        colWidths=[66 * mm, 42 * mm],
         hAlign="RIGHT",
     )
     totals.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#94A3B8")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-        ("BACKGROUND", (0, 0), (-1, 1), colors.HexColor("#F8FAFC")),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("BACKGROUND", (0, 0), (-1, 0), PDF_PANEL),
+        ("BACKGROUND", (0, 1), (-1, 1), PDF_ACCENT),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
     story.append(totals)
-    story.append(Spacer(1, 6 * mm))
+    story.append(Spacer(1, 2 * mm))
+    story.append(pdf_markup(
+        f"<b>Slovom:</b> {escape(amount_in_words_sk(inv.total))}",
+        "words_line",
+    ))
+    story.append(Spacer(1, 7 * mm))
 
-    qr_image = PdfImage(str(qr_png_path), width=28 * mm, height=28 * mm)
-    notes_and_qr = PdfTable(
-        [[
-            pdf_multiline([
-                "Poznámky / doplňujúci text",
+    # Notes panel with a left accent bar; QR sits on the right.
+    qr_image = PdfImage(str(qr_png_path), width=26 * mm, height=26 * mm)
+    notes_cell = [
+        pdf_paragraph("Poznámky / doplňujúci text", "section_label"),
+        Spacer(1, 1.5 * mm),
+        pdf_multiline(
+            [
                 inv.note,
                 f"Referenčný text: {make_reference_text(inv.variable_symbol, billing_month(inv.issue_date))}",
-            ], "body"),
-            qr_image,
-        ]],
-        colWidths=[145 * mm, 30 * mm],
+            ],
+            "note_text",
+        ),
+    ]
+    notes_and_qr = PdfTable(
+        [[notes_cell, qr_image]],
+        colWidths=[140 * mm, 36 * mm],
     )
     notes_and_qr.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#94A3B8")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BACKGROUND", (0, 0), (-1, -1), PDF_PANEL),
+        ("LINEBEFORE", (0, 0), (0, -1), 2.2, PDF_ACCENT),
+        ("VALIGN", (0, 0), (0, 0), "TOP"),
+        ("VALIGN", (1, 0), (1, 0), "MIDDLE"),
         ("ALIGN", (1, 0), (1, 0), "CENTER"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (0, 0), 10),
+        ("LEFTPADDING", (1, 0), (1, 0), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
         ("TOPPADDING", (0, 0), (-1, -1), 8),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
     story.append(notes_and_qr)
-    story.append(Spacer(1, 8 * mm))
+    story.append(Spacer(1, 16 * mm))
 
+    # Signature area: two ruled columns with a gap, names beneath.
     footer = PdfTable(
         [
-            [pdf_paragraph("Vyhotovil", "heading"), pdf_paragraph("Prevzal", "heading")],
-            [pdf_paragraph(inv.prepared_by, "body"), pdf_paragraph(inv.received_by or "", "body")],
+            [pdf_paragraph("Vyhotovil", "heading"), "", pdf_paragraph("Prevzal", "heading")],
+            [pdf_paragraph(inv.prepared_by, "body"), "", pdf_paragraph(inv.received_by or "", "body")],
         ],
-        colWidths=[87 * mm, 87 * mm],
+        colWidths=[80 * mm, 16 * mm, 80 * mm],
     )
     footer.setStyle(TableStyle([
-        ("LINEABOVE", (0, 0), (-1, 0), 0.8, colors.HexColor("#94A3B8")),
+        ("LINEABOVE", (0, 0), (0, 0), 0.8, PDF_MUTED),
+        ("LINEABOVE", (2, 0), (2, 0), 0.8, PDF_MUTED),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, 0), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
     ]))
     story.append(footer)
@@ -1230,6 +1453,21 @@ def customer_manifest_row(customer: Party) -> dict[str, str]:
     }
 
 
+def expected_charge_manifest_row(record: PlannedInvoice) -> dict[str, str]:
+    invoice = record.invoice
+    customer = invoice.customer
+    return {
+        "batch_id": record.batch_id,
+        "customer_id": customer.customer_id,
+        "customer_name": customer.name,
+        "billing_month": billing_month(invoice.issue_date),
+        "variable_symbol": invoice.variable_symbol,
+        "expected_amount": decimal_string(invoice.total),
+        "due_date": invoice.due_date.isoformat(),
+        "invoice_no": invoice.invoice_no,
+    }
+
+
 def invoice_manifest_row(record: PlannedInvoice, *, include_pdf: bool) -> dict[str, str]:
     invoice = record.invoice
     customer = invoice.customer
@@ -1292,6 +1530,7 @@ def write_manifests(outdir: Path, records: list[PlannedInvoice], *, include_pdf:
     manifests_dir.mkdir(parents=True, exist_ok=True)
 
     invoice_rows = [invoice_manifest_row(record, include_pdf=include_pdf) for record in records]
+    expected_charge_rows = [expected_charge_manifest_row(record) for record in records]
     customers_by_id = {record.invoice.customer.customer_id: record.invoice.customer for record in records}
     customer_rows = [customer_manifest_row(customer) for customer in customers_by_id.values()]
 
@@ -1306,12 +1545,17 @@ def write_manifests(outdir: Path, records: list[PlannedInvoice], *, include_pdf:
     }
 
     write_csv(manifests_dir / "invoices.csv", invoice_rows)
+    write_csv(manifests_dir / "expected_charges.csv", expected_charge_rows)
     write_csv(manifests_dir / "customers.csv", customer_rows)
 
     invoices_json = {
         "batch": batch,
         "supplier": supplier_manifest(),
         "invoices": [json_invoice_record(record, include_pdf=include_pdf) for record in records],
+    }
+    expected_charges_json = {
+        "batch": batch,
+        "expected_charges": expected_charge_rows,
     }
     customers_json = {
         "batch": batch,
@@ -1320,6 +1564,8 @@ def write_manifests(outdir: Path, records: list[PlannedInvoice], *, include_pdf:
 
     with (manifests_dir / "invoices.json").open("w", encoding="utf-8") as handle:
         json.dump(invoices_json, handle, ensure_ascii=False, indent=2)
+    with (manifests_dir / "expected_charges.json").open("w", encoding="utf-8") as handle:
+        json.dump(expected_charges_json, handle, ensure_ascii=False, indent=2)
     with (manifests_dir / "customers.json").open("w", encoding="utf-8") as handle:
         json.dump(customers_json, handle, ensure_ascii=False, indent=2)
 

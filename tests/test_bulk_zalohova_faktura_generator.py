@@ -126,6 +126,49 @@ class BulkGeneratorTests(unittest.TestCase):
             self.assertTrue(pdf_path.exists())
             self.assertGreater(pdf_path.stat().st_size, 0)
 
+    def test_expected_charge_manifest_uses_owed_amount_and_due_date(self) -> None:
+        records = MODULE.build_batch_plan(
+            count=5,
+            start_index=1,
+            issue_date=dt.date(2026, 5, 25),
+            seed=42,
+            customers_csv=None,
+        )
+
+        underpay_record = next(record for record in records if record.payment_scenario == "underpay")
+        row = MODULE.expected_charge_manifest_row(underpay_record)
+
+        self.assertEqual(row["customer_id"], underpay_record.invoice.customer.customer_id)
+        self.assertEqual(row["billing_month"], "2026-05")
+        self.assertEqual(row["variable_symbol"], underpay_record.invoice.variable_symbol)
+        self.assertEqual(row["expected_amount"], "210.00")
+        self.assertEqual(row["due_date"], underpay_record.invoice.due_date.isoformat())
+        self.assertNotEqual(row["expected_amount"], MODULE.decimal_string(underpay_record.suggested_received_amount))
+
+    def test_write_manifests_creates_expected_charges_files(self) -> None:
+        records = MODULE.build_batch_plan(
+            count=3,
+            start_index=1,
+            issue_date=dt.date(2026, 5, 25),
+            seed=42,
+            customers_csv=None,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            MODULE.write_manifests(
+                tmp_path,
+                records,
+                include_pdf=True,
+                template=ROOT / "docs" / "zalohova_faktura_template_ready.docx",
+                seed=42,
+            )
+
+            expected_csv = tmp_path / "manifests" / "expected_charges.csv"
+            expected_json = tmp_path / "manifests" / "expected_charges.json"
+            self.assertTrue(expected_csv.exists())
+            self.assertTrue(expected_json.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

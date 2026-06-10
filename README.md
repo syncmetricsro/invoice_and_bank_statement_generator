@@ -58,6 +58,8 @@ This now also writes:
 ```text
 generated_invoices/
   manifests/
+    expected_charges.csv
+    expected_charges.json
     invoices.csv
     invoices.json
     customers.csv
@@ -130,6 +132,21 @@ Every invoice manifest row also includes reconciliation-test metadata:
 - `suggested_received_amount`
 - `suggested_split_amounts`
 - `reference_text_template`
+
+The generator also writes a dedicated expected-charge export for downstream seeding:
+
+- `expected_charges.csv`
+- `expected_charges.json`
+
+Each expected-charge row carries the owed amount and payment deadline:
+
+- `customer_id`
+- `customer_name`
+- `billing_month`
+- `variable_symbol`
+- `expected_amount`
+- `due_date`
+- `invoice_no`
 
 Supported payment scenarios:
 
