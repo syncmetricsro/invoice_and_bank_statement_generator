@@ -17,6 +17,7 @@ __pycache__/
 # Generated invoice outputs
 generated_invoices/
 generated_invoices_5/
+generated_invoices_25/
 bank_statement_*/
 tmp_smoke/
 tmp_smoke_v2/

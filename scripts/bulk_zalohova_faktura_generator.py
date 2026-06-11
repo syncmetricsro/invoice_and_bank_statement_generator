@@ -20,7 +20,7 @@ import datetime as dt
 import json
 import random
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, ROUND_HALF_UP
 from functools import lru_cache
 from pathlib import Path
@@ -71,6 +71,12 @@ class Party:
     bank_code: str = ""
     account_number: str = ""
     bank_name: str = ""
+    monthly_fee: str = ""
+    annual_extra_fee: str = ""
+    annual_extra_interval_months: str = ""
+    payment_method: str = ""
+    vat_status: str = ""
+    status: str = ""
 
     @property
     def iban_compact(self) -> str:
@@ -102,10 +108,11 @@ class InvoiceData:
 class PlannedInvoice:
     batch_id: str
     invoice: InvoiceData
+    charge_type: str
     amount_bucket: str
     payment_scenario: str
-    suggested_received_amount: Decimal
-    suggested_split_amounts: tuple[Decimal, ...]
+    simulated_paid_total: Decimal
+    simulated_split_amounts: tuple[Decimal, ...]
     reference_text_template: str
     filename_base: str
 
@@ -1134,6 +1141,13 @@ FIXED_BUCKET_AMOUNTS = {
 }
 RANDOM_BUCKET_FORBIDDEN_AMOUNTS = {80, 180, 210}
 
+ANNUAL_EXTRA_FEE = Decimal("120.00")
+ANNUAL_EXTRA_INTERVAL_MONTHS = 12
+ANNUAL_EXTRA_CUSTOMER_MODULO = 5
+DIRECT_DEBIT_MODULO = 10
+INACTIVE_STATUS_MODULO = 40
+VAT_PAYER_TRUTHY_VALUES = {"áno", "ano", "yes", "true", "1"}
+
 
 def first_non_empty(row: dict[str, Any], *keys: str) -> str:
     for key in keys:
@@ -1220,6 +1234,7 @@ def generated_customer(index: int, seed: int) -> Party:
         ico=ico,
         dic=dic,
         ic_dph=ic_dph,
+        vat_payer="Áno" if ic_dph else "Nie",
         register=f"Zapísaná v Obchodnom registri príslušného súdu, oddiel Sro, vložka {10000 + index}/X",
         contact=f"Kontaktná osoba: {first} {last}",
         phone=f"+421 9{index % 10:01d}{(1000000 + index) % 9000000:07d}",
@@ -1271,6 +1286,11 @@ def normalize_customer_row(row: dict[str, str], index: int, seed: int) -> Party:
         bank_code=bank_code,
         account_number=account_number,
         bank_name=bank_name,
+        annual_extra_fee=first_non_empty(row, "annual_extra_fee"),
+        annual_extra_interval_months=first_non_empty(row, "annual_extra_interval_months"),
+        payment_method=first_non_empty(row, "payment_method"),
+        vat_status=first_non_empty(row, "vat_status"),
+        status=first_non_empty(row, "status"),
     )
 
 
@@ -1306,8 +1326,8 @@ def random_bucket_amount(rng: random.Random, *, minimum: int = 1) -> Decimal:
             return money(candidate)
 
 
-def payment_offset(expected_amount: Decimal) -> Decimal:
-    euros = int(expected_amount)
+def payment_offset(invoice_total: Decimal) -> Decimal:
+    euros = int(invoice_total)
     if euros <= 99:
         return Decimal("10.00")
     if euros <= 999:
@@ -1315,8 +1335,8 @@ def payment_offset(expected_amount: Decimal) -> Decimal:
     return Decimal("50.00")
 
 
-def exact_split_amounts(expected_amount: Decimal, index: int) -> tuple[Decimal, Decimal]:
-    euros = int(expected_amount)
+def exact_split_amounts(invoice_total: Decimal, index: int) -> tuple[Decimal, Decimal]:
+    euros = int(invoice_total)
     if euros < 2:
         raise ValueError("Split payments require an amount of at least 2 EUR")
     adjustment = (index % 5) - 2
@@ -1325,19 +1345,51 @@ def exact_split_amounts(expected_amount: Decimal, index: int) -> tuple[Decimal, 
     return money(first), money(second)
 
 
-def planned_payment(expected_amount: Decimal, scenario: str, index: int) -> tuple[Decimal, tuple[Decimal, ...]]:
+def planned_payment(invoice_total: Decimal, scenario: str, index: int) -> tuple[Decimal, tuple[Decimal, ...]]:
     if scenario == "exact_single":
-        return expected_amount, ()
+        return invoice_total, ()
     if scenario == "exact_split_total":
-        return expected_amount, exact_split_amounts(expected_amount, index)
+        return invoice_total, exact_split_amounts(invoice_total, index)
     if scenario == "underpay":
-        received = max(Decimal("1.00"), expected_amount - payment_offset(expected_amount))
-        if received >= expected_amount:
-            received = money(expected_amount - Decimal("1.00"))
+        received = max(Decimal("1.00"), invoice_total - payment_offset(invoice_total))
+        if received >= invoice_total:
+            received = money(invoice_total - Decimal("1.00"))
         return received, ()
     if scenario == "overpay":
-        return expected_amount + payment_offset(expected_amount), ()
+        return invoice_total + payment_offset(invoice_total), ()
     raise ValueError(f"Unsupported payment scenario: {scenario}")
+
+
+def has_annual_extra(index: int) -> bool:
+    return index % ANNUAL_EXTRA_CUSTOMER_MODULO == 0
+
+
+def customer_payment_method(index: int) -> str:
+    return "direct_debit" if index % DIRECT_DEBIT_MODULO == 0 else "bank_transfer"
+
+
+def customer_status(index: int) -> str:
+    return "inactive" if index % INACTIVE_STATUS_MODULO == 0 else "active"
+
+
+def vat_status_for(party: Party) -> str:
+    if party.ic_dph.strip() or party.vat_payer.strip().lower() in VAT_PAYER_TRUTHY_VALUES:
+        return "vat_payer"
+    return "non_vat_payer"
+
+
+def billing_profile_party(customer: Party, index: int, amount: Decimal) -> Party:
+    annual_extra = has_annual_extra(index)
+    return replace(
+        customer,
+        monthly_fee=decimal_string(amount),
+        annual_extra_fee=customer.annual_extra_fee or (decimal_string(ANNUAL_EXTRA_FEE) if annual_extra else ""),
+        annual_extra_interval_months=customer.annual_extra_interval_months
+        or (str(ANNUAL_EXTRA_INTERVAL_MONTHS) if annual_extra else ""),
+        payment_method=customer.payment_method or customer_payment_method(index),
+        vat_status=customer.vat_status or vat_status_for(customer),
+        status=customer.status or customer_status(index),
+    )
 
 
 def amount_for_bucket(bucket: str, scenario: str, rng: random.Random) -> Decimal:
@@ -1370,6 +1422,25 @@ def build_invoice(index: int, customer: Party, issue_date: dt.date, amount: Deci
     )
 
 
+def build_annual_extra_invoice(index: int, customer: Party, issue_date: dt.date, amount: Decimal) -> InvoiceData:
+    # 9-digit VS (year + "9" + index) cannot collide with the 8-digit monthly VS scheme.
+    variable_symbol = f"{issue_date.year}9{index:04d}"
+    return InvoiceData(
+        invoice_no=f"{issue_date.year}-{index:04d}-AE",
+        variable_symbol=variable_symbol,
+        issue_date=issue_date,
+        due_date=issue_date + dt.timedelta(days=14),
+        supplier=SUPPLIER,
+        customer=customer,
+        item_description=f"Ročný doplnkový poplatok za {issue_date.year}",
+        quantity=Decimal("1"),
+        unit="ks",
+        unit_price=amount,
+        prepared_by="Jana Účtovníková",
+        received_by="",
+    )
+
+
 def build_batch_id(issue_date: dt.date, start_index: int, count: int, seed: int) -> str:
     return f"invgen-{issue_date:%Y%m%d}-start{start_index:05d}-count{count:05d}-seed{seed}"
 
@@ -1389,27 +1460,51 @@ def build_batch_plan(
     batch_id = build_batch_id(issue_date, start_index, count, seed)
     records: list[PlannedInvoice] = []
 
+    annual_extra_records: list[PlannedInvoice] = []
+
     for offset, customer in enumerate(customers):
         index = start_index + offset
         amount_bucket = amount_buckets[offset]
         payment_scenario = payment_scenarios[offset]
         amount = amount_for_bucket(amount_bucket, payment_scenario, rng)
+        customer = billing_profile_party(customer, index, amount)
         invoice = build_invoice(index, customer, issue_date, amount)
-        suggested_received_amount, suggested_split_amounts = planned_payment(invoice.total, payment_scenario, index)
+        simulated_paid_total, simulated_split_amounts = planned_payment(invoice.total, payment_scenario, index)
         filename_base = safe_filename(
             f"ZF_{invoice.invoice_no}_{invoice.variable_symbol}_{customer.customer_id}_{customer.name}"
         )
         records.append(PlannedInvoice(
             batch_id=batch_id,
             invoice=invoice,
+            charge_type="monthly",
             amount_bucket=amount_bucket,
             payment_scenario=payment_scenario,
-            suggested_received_amount=suggested_received_amount,
-            suggested_split_amounts=suggested_split_amounts,
+            simulated_paid_total=simulated_paid_total,
+            simulated_split_amounts=simulated_split_amounts,
             reference_text_template=make_reference_text(invoice.variable_symbol, billing_month(issue_date)),
             filename_base=filename_base,
         ))
 
+        if has_annual_extra(index):
+            extra_amount = money(customer.annual_extra_fee or ANNUAL_EXTRA_FEE)
+            extra_invoice = build_annual_extra_invoice(index, customer, issue_date, extra_amount)
+            extra_filename_base = safe_filename(
+                f"ZF_{extra_invoice.invoice_no}_{extra_invoice.variable_symbol}_{customer.customer_id}_{customer.name}"
+            )
+            annual_extra_records.append(PlannedInvoice(
+                batch_id=batch_id,
+                invoice=extra_invoice,
+                charge_type="annual_extra",
+                amount_bucket="annual_extra",
+                payment_scenario="exact_single",
+                simulated_paid_total=extra_invoice.total,
+                simulated_split_amounts=(),
+                reference_text_template=make_reference_text(extra_invoice.variable_symbol, billing_month(issue_date)),
+                filename_base=extra_filename_base,
+            ))
+
+    # Appended after the main loop so the monthly batch stays byte-identical per seed.
+    records.extend(annual_extra_records)
     return records
 
 
@@ -1450,6 +1545,12 @@ def customer_manifest_row(customer: Party) -> dict[str, str]:
         "customer_bank_code": customer.bank_code,
         "customer_account_number": customer.account_number,
         "customer_bank_name": customer.bank_name,
+        "monthly_fee": customer.monthly_fee,
+        "annual_extra_fee": customer.annual_extra_fee,
+        "annual_extra_interval_months": customer.annual_extra_interval_months,
+        "payment_method": customer.payment_method,
+        "vat_status": customer.vat_status,
+        "status": customer.status,
     }
 
 
@@ -1461,8 +1562,9 @@ def expected_charge_manifest_row(record: PlannedInvoice) -> dict[str, str]:
         "customer_id": customer.customer_id,
         "customer_name": customer.name,
         "billing_month": billing_month(invoice.issue_date),
+        "charge_type": record.charge_type,
         "variable_symbol": invoice.variable_symbol,
-        "expected_amount": decimal_string(invoice.total),
+        "charge_amount": decimal_string(invoice.total),
         "due_date": invoice.due_date.isoformat(),
         "invoice_no": invoice.invoice_no,
     }
@@ -1479,17 +1581,18 @@ def invoice_manifest_row(record: PlannedInvoice, *, include_pdf: bool) -> dict[s
         "billing_month": billing_month(invoice.issue_date),
         "issue_date": invoice.issue_date.isoformat(),
         "due_date": invoice.due_date.isoformat(),
-        "expected_amount": decimal_string(invoice.total),
+        "invoice_total_amount": decimal_string(invoice.total),
         "currency": "EUR",
         "invoice_no": invoice.invoice_no,
+        "charge_type": record.charge_type,
         "item_description": invoice.item_description,
         "quantity": compact_decimal_string(invoice.quantity),
         "unit": invoice.unit,
         "unit_price": decimal_string(invoice.unit_price),
         "amount_bucket": record.amount_bucket,
         "payment_scenario": record.payment_scenario,
-        "suggested_received_amount": decimal_string(record.suggested_received_amount),
-        "suggested_split_amounts": csv_json_list(record.suggested_split_amounts),
+        "simulated_paid_total": decimal_string(record.simulated_paid_total),
+        "simulated_split_amounts": csv_json_list(record.simulated_split_amounts),
         "supplier_name": invoice.supplier.name,
         "supplier_iban": invoice.supplier.iban_compact,
         "customer_iban": customer.iban_compact,
@@ -1512,7 +1615,7 @@ def invoice_manifest_row(record: PlannedInvoice, *, include_pdf: bool) -> dict[s
 
 def json_invoice_record(record: PlannedInvoice, *, include_pdf: bool) -> dict[str, Any]:
     row = invoice_manifest_row(record, include_pdf=include_pdf)
-    row["suggested_split_amounts"] = [decimal_string(value) for value in record.suggested_split_amounts]
+    row["simulated_split_amounts"] = [decimal_string(value) for value in record.simulated_split_amounts]
     return row
 
 

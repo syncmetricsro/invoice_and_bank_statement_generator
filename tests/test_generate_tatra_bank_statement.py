@@ -82,13 +82,16 @@ class GenerateTatraBankStatementTests(unittest.TestCase):
             for row in reconciliation_expectations:
                 reasons[row.expected_reason] = reasons.get(row.expected_reason, 0) + 1
 
-            self.assertEqual(reasons["exact_match"], 360)
-            self.assertEqual(reasons["duplicate_possible"], 40)
+            # 1000 monthly invoices plus 200 annual extras (every 5th customer),
+            # all extras exact_single: 600 exacts, every 10th becomes a duplicate.
+            self.assertEqual(len(rows), 1200)
+            self.assertEqual(reasons["exact_match"], 540)
+            self.assertEqual(reasons["duplicate_possible"], 60)
             self.assertEqual(reasons["split_payment_possible"], 200)
             self.assertEqual(reasons["underpayment"], 200)
             self.assertEqual(reasons["overpayment"], 200)
-            self.assertEqual(summary["noise_credit_count"], 20)
-            self.assertEqual(summary["noise_debit_count"], 20)
+            self.assertEqual(summary["noise_credit_count"], 24)
+            self.assertEqual(summary["noise_debit_count"], 24)
             self.assertEqual(len(tx_expectations), len(transactions))
 
     def test_transaction_integrity(self) -> None:
@@ -106,17 +109,25 @@ class GenerateTatraBankStatementTests(unittest.TestCase):
                 if expectation.expected_category == "unknown_credit":
                     self.assertNotIn(transaction.variable_symbol, real_vs)
 
-            reconciliation_by_reason = {row.expected_reason: row for row in reconciliation_expectations}
             split_example = next(row for row in reconciliation_expectations if row.expected_reason == "split_payment_possible")
             split_invoice = next(invoice for invoice in rows if invoice.variable_symbol == split_example.variable_symbol)
-            self.assertEqual(Decimal(split_example.expected_received_amount), sum(split_invoice.suggested_split_amounts, Decimal("0.00")))
+            self.assertEqual(Decimal(split_example.expected_received_total), sum(split_invoice.simulated_split_amounts, Decimal("0.00")))
 
             duplicate_example = next(row for row in reconciliation_expectations if row.expected_reason == "duplicate_possible")
             duplicate_ids = duplicate_example.expected_matched_transaction_ids.split(",")
             duplicate_transactions = [transaction for transaction in transactions if transaction.transaction_id in duplicate_ids]
             self.assertEqual(len(duplicate_transactions), 2)
             self.assertEqual(duplicate_transactions[0].amount, duplicate_transactions[1].amount)
-            self.assertEqual(Decimal(duplicate_transactions[0].amount) * 2, Decimal(duplicate_example.expected_received_amount))
+            self.assertEqual(Decimal(duplicate_transactions[0].amount) * 2, Decimal(duplicate_example.expected_received_total))
+
+            annual_extra_example = next(row for row in reconciliation_expectations if row.invoice_no.endswith("-AE"))
+            matched_ids = annual_extra_example.expected_matched_transaction_ids.split(",")
+            matched_transactions = [transaction for transaction in transactions if transaction.transaction_id in matched_ids]
+            self.assertEqual(len(matched_transactions), int(annual_extra_example.expected_matched_transaction_count))
+            self.assertEqual(
+                sum(Decimal(transaction.amount) for transaction in matched_transactions),
+                Decimal(annual_extra_example.expected_received_total),
+            )
 
     def test_credit_booking_dates_stay_inside_matching_window(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

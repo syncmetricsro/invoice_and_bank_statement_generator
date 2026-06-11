@@ -25,10 +25,10 @@ REQUIRED_COLUMNS = [
     "billing_month",
     "issue_date",
     "due_date",
-    "expected_amount",
+    "invoice_total_amount",
     "payment_scenario",
-    "suggested_received_amount",
-    "suggested_split_amounts",
+    "simulated_paid_total",
+    "simulated_split_amounts",
     "supplier_name",
     "supplier_iban",
     "customer_iban",
@@ -60,10 +60,10 @@ class InvoiceRow:
     billing_month: str
     issue_date: dt.date
     due_date: dt.date
-    expected_amount: Decimal
+    invoice_total_amount: Decimal
     payment_scenario: str
-    suggested_received_amount: Decimal
-    suggested_split_amounts: tuple[Decimal, ...]
+    simulated_paid_total: Decimal
+    simulated_split_amounts: tuple[Decimal, ...]
     supplier_name: str
     supplier_iban: str
     customer_iban: str
@@ -112,7 +112,7 @@ class ReconciliationExpectation:
     expected_status: str
     expected_reason: str
     expected_invoice_action: str
-    expected_received_amount: str
+    expected_received_total: str
     expected_matched_transaction_count: str
     expected_matched_transaction_ids: str
 
@@ -171,10 +171,10 @@ def read_invoice_rows(path: Path) -> list[InvoiceRow]:
                 billing_month=str(raw["billing_month"]).strip(),
                 issue_date=parse_date(str(raw["issue_date"]).strip()),
                 due_date=parse_date(str(raw["due_date"]).strip()),
-                expected_amount=money(raw["expected_amount"]),
+                invoice_total_amount=money(raw["invoice_total_amount"]),
                 payment_scenario=str(raw["payment_scenario"]).strip(),
-                suggested_received_amount=money(raw["suggested_received_amount"]),
-                suggested_split_amounts=parse_split_amounts(str(raw["suggested_split_amounts"])),
+                simulated_paid_total=money(raw["simulated_paid_total"]),
+                simulated_split_amounts=parse_split_amounts(str(raw["simulated_split_amounts"])),
                 supplier_name=str(raw["supplier_name"]).strip(),
                 supplier_iban=compact_iban(str(raw["supplier_iban"]).strip()),
                 customer_iban=compact_iban(str(raw["customer_iban"]).strip()),
@@ -336,7 +336,7 @@ def generate_statement(
         expected_status = "Paid"
         expected_reason = "exact_match"
         expected_action = "create_invoice"
-        expected_received = invoice.expected_amount
+        expected_received = invoice.invoice_total_amount
         category = "customer_payment"
 
         if invoice.payment_scenario == "exact_single":
@@ -345,7 +345,7 @@ def generate_statement(
                 expected_status = "Mismatch"
                 expected_reason = "duplicate_possible"
                 expected_action = "manual_review"
-                expected_received = money(invoice.expected_amount * 2)
+                expected_received = money(invoice.invoice_total_amount * 2)
                 category = "duplicate_payment"
                 for duplicate_index in range(2):
                     tx_id = build_transaction_id("TX", transaction_number)
@@ -356,7 +356,7 @@ def generate_statement(
                         import_batch_id=import_batch_id,
                         transaction_id=tx_id,
                         booking_date=duplicate_date,
-                        amount=invoice.expected_amount,
+                        amount=invoice.invoice_total_amount,
                         direction="credit",
                         payer_name=invoice.customer_name,
                         counterparty_iban=invoice.customer_iban,
@@ -388,7 +388,7 @@ def generate_statement(
                     import_batch_id=import_batch_id,
                     transaction_id=tx_id,
                     booking_date=booking,
-                    amount=invoice.expected_amount,
+                    amount=invoice.invoice_total_amount,
                     direction="credit",
                     payer_name=invoice.customer_name,
                     counterparty_iban=invoice.customer_iban,
@@ -417,8 +417,8 @@ def generate_statement(
             expected_status = "Mismatch"
             expected_reason = "split_payment_possible"
             expected_action = "manual_review"
-            expected_received = sum(invoice.suggested_split_amounts, Decimal("0.00"))
-            for split_index, amount in enumerate(invoice.suggested_split_amounts, start=1):
+            expected_received = sum(invoice.simulated_split_amounts, Decimal("0.00"))
+            for split_index, amount in enumerate(invoice.simulated_split_amounts, start=1):
                 tx_id = build_transaction_id("TX", transaction_number)
                 transaction_number += 1
                 split_date = clamp_date(booking + dt.timedelta(days=split_index - 1), window_end)
@@ -459,13 +459,13 @@ def generate_statement(
             expected_status = "Mismatch"
             expected_reason = "underpayment" if invoice.payment_scenario == "underpay" else "overpayment"
             expected_action = "manual_review"
-            expected_received = invoice.suggested_received_amount
+            expected_received = invoice.simulated_paid_total
             reference_text = reference_variant(invoice.reference_text_template, invoice_index)
             transactions.append(transaction_row(
                 import_batch_id=import_batch_id,
                 transaction_id=tx_id,
                 booking_date=booking,
-                amount=invoice.suggested_received_amount,
+                amount=invoice.simulated_paid_total,
                 direction="credit",
                 payer_name=invoice.customer_name,
                 counterparty_iban=invoice.customer_iban,
@@ -499,7 +499,7 @@ def generate_statement(
             expected_status=expected_status,
             expected_reason=expected_reason,
             expected_invoice_action=expected_action,
-            expected_received_amount=decimal_string(expected_received),
+            expected_received_total=decimal_string(expected_received),
             expected_matched_transaction_count=str(len(matched_ids)),
             expected_matched_transaction_ids=",".join(matched_ids),
         ))

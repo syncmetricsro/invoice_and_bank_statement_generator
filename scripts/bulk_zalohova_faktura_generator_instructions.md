@@ -166,14 +166,15 @@ The invoice manifest includes fields needed for later Tatra import/export testin
 - `customer_name`
 - `variable_symbol`
 - `billing_month`
-- `expected_amount`
+- `invoice_total_amount`
+- `charge_type` (`monthly` or `annual_extra`)
 - `amount_bucket`
 - `payment_scenario`
-- `suggested_received_amount`
-- `suggested_split_amounts`
+- `simulated_paid_total`
+- `simulated_split_amounts`
 - `reference_text_template`
 
-The customer manifest includes one deduplicated row per customer with generated or normalized bank identifiers.
+The expected-charges manifest carries `charge_amount` and `charge_type` per charge. The customer manifest includes one deduplicated row per customer with generated or normalized bank identifiers plus billing-profile columns (`monthly_fee`, `annual_extra_fee`, `annual_extra_interval_months`, `payment_method`, `vat_status`, `status`).
 
 ## 9. QR Code Warning
 

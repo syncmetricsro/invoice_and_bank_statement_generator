@@ -91,9 +91,27 @@ class BulkGeneratorTests(unittest.TestCase):
             customers_csv=None,
         )
 
-        self.assertEqual(len(records), 1000)
+        self.assertEqual(len(records), 1200)
         self.assertEqual(sum(record.amount_bucket == "random_whole_eur" for record in records), 150)
         self.assertEqual(sum(record.payment_scenario == "exact_split_total" for record in records), 200)
+
+        monthly_records = [record for record in records if record.charge_type == "monthly"]
+        annual_extras = [record for record in records if record.charge_type == "annual_extra"]
+        self.assertEqual(len(monthly_records), 1000)
+        self.assertEqual(len(annual_extras), 200)
+
+        monthly_customer_ids = {record.invoice.customer.customer_id for record in monthly_records}
+        for record in annual_extras:
+            invoice = record.invoice
+            self.assertEqual(invoice.total, MODULE.ANNUAL_EXTRA_FEE)
+            self.assertEqual(record.payment_scenario, "exact_single")
+            self.assertEqual(record.amount_bucket, "annual_extra")
+            self.assertTrue(invoice.invoice_no.endswith("-AE"))
+            self.assertEqual(len(invoice.variable_symbol), 9)
+            self.assertIn(invoice.customer.customer_id, monthly_customer_ids)
+
+        variable_symbols = [record.invoice.variable_symbol for record in records]
+        self.assertEqual(len(variable_symbols), len(set(variable_symbols)))
 
         for record in records:
             invoice = record.invoice
@@ -101,12 +119,12 @@ class BulkGeneratorTests(unittest.TestCase):
             if record.amount_bucket == "random_whole_eur":
                 self.assertNotIn(int(invoice.total), {80, 180, 210})
             if record.payment_scenario == "exact_split_total":
-                self.assertEqual(sum(record.suggested_split_amounts), record.suggested_received_amount)
-                self.assertEqual(len(record.suggested_split_amounts), 2)
+                self.assertEqual(sum(record.simulated_split_amounts), record.simulated_paid_total)
+                self.assertEqual(len(record.simulated_split_amounts), 2)
             if record.payment_scenario == "underpay":
-                self.assertLess(record.suggested_received_amount, invoice.total)
+                self.assertLess(record.simulated_paid_total, invoice.total)
             if record.payment_scenario == "overpay":
-                self.assertGreater(record.suggested_received_amount, invoice.total)
+                self.assertGreater(record.simulated_paid_total, invoice.total)
 
     def test_direct_pdf_renderer_writes_pdf(self) -> None:
         record = MODULE.build_batch_plan(
@@ -140,10 +158,45 @@ class BulkGeneratorTests(unittest.TestCase):
 
         self.assertEqual(row["customer_id"], underpay_record.invoice.customer.customer_id)
         self.assertEqual(row["billing_month"], "2026-05")
+        self.assertEqual(row["charge_type"], "monthly")
         self.assertEqual(row["variable_symbol"], underpay_record.invoice.variable_symbol)
-        self.assertEqual(row["expected_amount"], "210.00")
+        self.assertEqual(row["charge_amount"], "210.00")
         self.assertEqual(row["due_date"], underpay_record.invoice.due_date.isoformat())
-        self.assertNotEqual(row["expected_amount"], MODULE.decimal_string(underpay_record.suggested_received_amount))
+        self.assertNotEqual(row["charge_amount"], MODULE.decimal_string(underpay_record.simulated_paid_total))
+
+    def test_customer_billing_profile_is_deterministic(self) -> None:
+        records = MODULE.build_batch_plan(
+            count=10,
+            start_index=1,
+            issue_date=dt.date(2026, 5, 25),
+            seed=42,
+            customers_csv=None,
+        )
+
+        monthly_records = [record for record in records if record.charge_type == "monthly"]
+        annual_extras = {record.invoice.customer.customer_id: record for record in records if record.charge_type == "annual_extra"}
+        self.assertEqual(len(monthly_records), 10)
+        self.assertEqual(set(annual_extras), {"CUST-00005", "CUST-00010"})
+
+        for offset, record in enumerate(monthly_records):
+            index = 1 + offset
+            customer = record.invoice.customer
+            self.assertEqual(customer.monthly_fee, MODULE.decimal_string(record.invoice.total))
+            self.assertEqual(customer.vat_status, "vat_payer" if customer.ic_dph else "non_vat_payer")
+            self.assertEqual(customer.payment_method, MODULE.customer_payment_method(index))
+            self.assertEqual(customer.status, MODULE.customer_status(index))
+            if MODULE.has_annual_extra(index):
+                self.assertEqual(customer.annual_extra_fee, MODULE.decimal_string(MODULE.ANNUAL_EXTRA_FEE))
+                self.assertEqual(customer.annual_extra_interval_months, str(MODULE.ANNUAL_EXTRA_INTERVAL_MONTHS))
+                extra = annual_extras[customer.customer_id]
+                self.assertEqual(MODULE.decimal_string(extra.invoice.total), customer.annual_extra_fee)
+            else:
+                self.assertEqual(customer.annual_extra_fee, "")
+                self.assertEqual(customer.annual_extra_interval_months, "")
+
+        manifest_row = MODULE.customer_manifest_row(monthly_records[0].invoice.customer)
+        for key in ("monthly_fee", "annual_extra_fee", "annual_extra_interval_months", "payment_method", "vat_status", "status"):
+            self.assertIn(key, manifest_row)
 
     def test_write_manifests_creates_expected_charges_files(self) -> None:
         records = MODULE.build_batch_plan(
@@ -168,6 +221,11 @@ class BulkGeneratorTests(unittest.TestCase):
             expected_json = tmp_path / "manifests" / "expected_charges.json"
             self.assertTrue(expected_csv.exists())
             self.assertTrue(expected_json.exists())
+
+            with (tmp_path / "manifests" / "customers.csv").open("r", encoding="utf-8", newline="") as handle:
+                header = next(csv.reader(handle))
+            for column in ("monthly_fee", "annual_extra_fee", "annual_extra_interval_months", "payment_method", "vat_status", "status"):
+                self.assertIn(column, header)
 
 
 if __name__ == "__main__":

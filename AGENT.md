@@ -32,7 +32,7 @@ Primary template:
 - Treat `docs/` assets as source artifacts, not generated output.
 - Validate behavior with a small batch before assuming a 1000-document run is safe.
 - Keep README examples aligned with the actual CLI behavior in the script.
-- Keep manifest field names aligned with the downstream accounting automation flow, especially `customer_id`, `billing_month`, `variable_symbol`, and `expected_amount`.
+- Keep manifest field names aligned with the downstream accounting automation flow, especially `customer_id`, `billing_month`, `variable_symbol`, `invoice_total_amount`, and `charge_amount`.
 - Keep the bank-statement transaction fields aligned with the downstream normalized import shape, especially `transaction_id`, `direction`, `reference_text`, `variable_symbol`, and `counterparty_iban`.
 
 ## Important Behavioral Notes
