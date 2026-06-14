@@ -6,6 +6,7 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+from decimal import Decimal
 from pathlib import Path
 
 
@@ -197,6 +198,47 @@ class BulkGeneratorTests(unittest.TestCase):
         manifest_row = MODULE.customer_manifest_row(monthly_records[0].invoice.customer)
         for key in ("monthly_fee", "annual_extra_fee", "annual_extra_interval_months", "payment_method", "vat_status", "status"):
             self.assertIn(key, manifest_row)
+
+    def test_months_one_keeps_plain_invoice_number(self) -> None:
+        records = MODULE.build_batch_plan(
+            count=2,
+            start_index=1,
+            issue_date=dt.date(2026, 6, 14),
+            seed=42,
+            customers_csv=None,
+        )
+        # Single-month invoice numbers carry no -MM suffix (unchanged behavior).
+        for record in records:
+            self.assertRegex(record.invoice.invoice_no, r"^\d{4}-\d{4}$")
+
+    def test_months_multi_emits_recurring_series(self) -> None:
+        records = MODULE.build_batch_plan(
+            count=1,
+            start_index=1,
+            issue_date=dt.date(2026, 1, 14),
+            seed=42,
+            customers_csv=None,
+            months=6,
+        )
+        self.assertEqual(len(records), 6)
+
+        # Same VS and same amount every month; distinct, month-suffixed numbers.
+        self.assertEqual({r.invoice.variable_symbol for r in records}, {"20260001"})
+        self.assertEqual({MODULE.decimal_string(r.invoice.total) for r in records}, {MODULE.decimal_string(records[0].invoice.total)})
+        self.assertEqual(
+            [r.invoice.invoice_no for r in records],
+            [f"2026-0001-{m:02d}" for m in range(1, 7)],
+        )
+        self.assertEqual(len({r.filename_base for r in records}), 6)
+        self.assertEqual(
+            [MODULE.billing_month(r.invoice.issue_date) for r in records],
+            ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"],
+        )
+
+        # First five paid, final month unpaid.
+        self.assertTrue(all(r.payment_scenario == "exact_single" for r in records[:5]))
+        self.assertEqual(records[5].payment_scenario, "unpaid")
+        self.assertEqual(records[5].simulated_paid_total, Decimal("0.00"))
 
     def test_write_manifests_creates_expected_charges_files(self) -> None:
         records = MODULE.build_batch_plan(

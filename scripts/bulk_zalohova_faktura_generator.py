@@ -291,6 +291,16 @@ def billing_month(value: dt.date) -> str:
     return value.strftime("%Y-%m")
 
 
+def add_months(value: dt.date, n: int) -> dt.date:
+    # Shift by n calendar months, clamping the day to the target month's end
+    # (e.g. Jan 31 + 1 month -> Feb 28/29).
+    month_index = value.month - 1 + n
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    last_day = (dt.date(year, month, 28) + dt.timedelta(days=4)).replace(day=1) - dt.timedelta(days=1)
+    return dt.date(year, month, min(value.day, last_day.day))
+
+
 def safe_filename(text: str) -> str:
     text = re.sub(r"[^\w\-.]+", "_", text, flags=re.UNICODE)
     text = re.sub(r"_+", "_", text).strip("._")
@@ -1346,6 +1356,8 @@ def exact_split_amounts(invoice_total: Decimal, index: int) -> tuple[Decimal, De
 
 
 def planned_payment(invoice_total: Decimal, scenario: str, index: int) -> tuple[Decimal, tuple[Decimal, ...]]:
+    if scenario == "unpaid":
+        return Decimal("0.00"), ()
     if scenario == "exact_single":
         return invoice_total, ()
     if scenario == "exact_split_total":
@@ -1403,11 +1415,17 @@ def make_reference_text(variable_symbol: str, month: str) -> str:
     return f"/VS{variable_symbol}/KS0308/TXT {month} accounting services"
 
 
-def build_invoice(index: int, customer: Party, issue_date: dt.date, amount: Decimal) -> InvoiceData:
-    variable_symbol = f"{issue_date.year}{index:04d}"
+def build_invoice(
+    customer: Party,
+    issue_date: dt.date,
+    amount: Decimal,
+    *,
+    variable_symbol: str,
+    invoice_no: str,
+) -> InvoiceData:
     month_name = MONTHS_SK[(issue_date.month - 1) % 12]
     return InvoiceData(
-        invoice_no=f"{issue_date.year}-{index:04d}",
+        invoice_no=invoice_no,
         variable_symbol=variable_symbol,
         issue_date=issue_date,
         due_date=issue_date + dt.timedelta(days=14),
@@ -1452,6 +1470,7 @@ def build_batch_plan(
     issue_date: dt.date,
     seed: int,
     customers_csv: Optional[Path],
+    months: int = 1,
 ) -> list[PlannedInvoice]:
     rng = random.Random(seed)
     customers = resolve_customers(count, start_index, seed, customers_csv)
@@ -1465,10 +1484,56 @@ def build_batch_plan(
     for offset, customer in enumerate(customers):
         index = start_index + offset
         amount_bucket = amount_buckets[offset]
+        # VS is stable across the whole series (anchor year + index) — a
+        # recurring customer keeps one payment reference every month.
+        variable_symbol = f"{issue_date.year}{index:04d}"
+
+        if months > 1:
+            # Recurring monthly series: consistent fee, stable VS, distinct
+            # month-suffixed invoice numbers, final month left unpaid. Annual
+            # extras are skipped here to keep the series clean.
+            amount = amount_for_bucket(amount_bucket, "exact_single", rng)
+            customer = billing_profile_party(customer, index, amount)
+            for pos in range(1, months + 1):
+                month_issue = add_months(issue_date, pos - 1)
+                scenario = "unpaid" if pos == months else "exact_single"
+                invoice_no = f"{issue_date.year}-{index:04d}-{month_issue.month:02d}"
+                invoice = build_invoice(
+                    customer,
+                    month_issue,
+                    amount,
+                    variable_symbol=variable_symbol,
+                    invoice_no=invoice_no,
+                )
+                simulated_paid_total, simulated_split_amounts = planned_payment(
+                    invoice.total, scenario, index
+                )
+                filename_base = safe_filename(
+                    f"ZF_{invoice.invoice_no}_{invoice.variable_symbol}_{customer.customer_id}_{customer.name}"
+                )
+                records.append(PlannedInvoice(
+                    batch_id=batch_id,
+                    invoice=invoice,
+                    charge_type="monthly",
+                    amount_bucket=amount_bucket,
+                    payment_scenario=scenario,
+                    simulated_paid_total=simulated_paid_total,
+                    simulated_split_amounts=simulated_split_amounts,
+                    reference_text_template=make_reference_text(invoice.variable_symbol, billing_month(month_issue)),
+                    filename_base=filename_base,
+                ))
+            continue
+
         payment_scenario = payment_scenarios[offset]
         amount = amount_for_bucket(amount_bucket, payment_scenario, rng)
         customer = billing_profile_party(customer, index, amount)
-        invoice = build_invoice(index, customer, issue_date, amount)
+        invoice = build_invoice(
+            customer,
+            issue_date,
+            amount,
+            variable_symbol=variable_symbol,
+            invoice_no=f"{issue_date.year}-{index:04d}",
+        )
         simulated_paid_total, simulated_split_amounts = planned_payment(invoice.total, payment_scenario, index)
         filename_base = safe_filename(
             f"ZF_{invoice.invoice_no}_{invoice.variable_symbol}_{customer.customer_id}_{customer.name}"
@@ -1691,6 +1756,7 @@ def main() -> int:
     parser.add_argument("--outdir", default=Path("generated_invoices"), type=Path, help="Output directory.")
     parser.add_argument("--count", default=1000, type=int, help="Number of documents to generate.")
     parser.add_argument("--start-index", default=1, type=int, help="First invoice/customer index.")
+    parser.add_argument("--months", default=1, type=int, help="Consecutive monthly invoices per customer (same VS, distinct numbers). >1 leaves the final month unpaid. Max 12.")
     parser.add_argument("--issue-date", default=dt.date.today(), type=parse_date, help="Issue date YYYY-MM-DD.")
     parser.add_argument("--customers-csv", type=Path, help="Optional CSV with customer data. Missing rows are backfilled.")
     parser.add_argument("--pdf", action="store_true", help="Also export text-based PDFs directly from Python.")
@@ -1700,6 +1766,8 @@ def main() -> int:
 
     if args.count <= 0:
         raise SystemExit("--count must be greater than zero")
+    if not 1 <= args.months <= 12:
+        raise SystemExit("--months must be between 1 and 12")
     if not args.template.exists():
         raise SystemExit(f"Template not found: {args.template}")
 
@@ -1716,6 +1784,7 @@ def main() -> int:
         issue_date=args.issue_date,
         seed=args.seed,
         customers_csv=args.customers_csv,
+        months=args.months,
     )
 
     generated_docx: list[Path] = []

@@ -186,6 +186,36 @@ For a 1000-invoice batch, the generator uses this deterministic mix:
 
 Every 5th customer additionally receives an annual extra invoice (`120.00 EUR`, `exact_single`), so `--count N` produces `N + floor(N/5)` documents. Annual extra invoices use invoice numbers ending in `-AE` and 9-digit variable symbols, so they never collide with the 8-digit monthly symbols.
 
+### Recurring monthly series (`--months N`)
+
+By default each customer gets one invoice. Use `--months N` (1–12) to emit a
+recurring series of `N` consecutive monthly invoices per customer — the same
+use case as a real client billed every month:
+
+- **Stable variable symbol** across the whole series (anchor `--issue-date`
+  year + index), even across a year boundary — a recurring payment reference.
+- **Distinct, month-suffixed invoice numbers**: `2026-0001-01` … `2026-0001-06`.
+- **Constant monthly fee** across the series.
+- **Final month left unpaid** (`payment_scenario = unpaid`); earlier months are
+  `exact_single`. The bank-statement generator then emits a paid transaction
+  per earlier month (distinct value dates, same VS) and none for the last —
+  exactly the "paid history + current arrears" fixture that exercises
+  reconciliation's match-by-VS-**and**-month logic and its cross-month
+  payment-theft guard. Annual extras are skipped in this mode.
+
+```bash
+# One customer, 6 monthly invoices (Jan–Jun 2026), June unpaid:
+.venv/bin/python scripts/bulk_zalohova_faktura_generator.py \
+  --template docs/zalohova_faktura_template_ready.docx \
+  --outdir generated_recurring --count 1 --start-index 1 \
+  --issue-date 2026-01-14 --months 6 --pdf
+.venv/bin/python scripts/generate_tatra_bank_statement.py \
+  --invoices generated_recurring/manifests/invoices.csv \
+  --outdir generated_recurring/bank_statement --seed 42
+```
+
+`--months 1` (the default) is unchanged.
+
 Every invoice manifest row also includes reconciliation-test metadata:
 
 - `charge_type` (`monthly` or `annual_extra`)

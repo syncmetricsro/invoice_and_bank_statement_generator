@@ -43,7 +43,49 @@ def write_invoice_manifest(path: Path, count: int = 1000) -> None:
         writer.writerows(rows)
 
 
+def write_recurring_manifest(path: Path, months: int = 6) -> None:
+    records = INVOICE_MODULE.build_batch_plan(
+        count=1,
+        start_index=1,
+        issue_date=dt.date(2026, 1, 14),
+        seed=42,
+        customers_csv=None,
+        months=months,
+    )
+    rows = [INVOICE_MODULE.invoice_manifest_row(record, include_pdf=True) for record in records]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 class GenerateTatraBankStatementTests(unittest.TestCase):
+    def test_recurring_series_pays_each_month_except_last(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            invoices_csv = Path(tmp_dir) / "invoices.csv"
+            write_recurring_manifest(invoices_csv, months=6)
+            rows = STATEMENT_MODULE.read_invoice_rows(invoices_csv)
+            transactions, _tx, recon, _summary = STATEMENT_MODULE.generate_statement(rows, seed=42)
+
+            vs = rows[0].variable_symbol
+            customer_credits = [
+                t for t in transactions
+                if t.direction == "credit" and t.variable_symbol == vs
+            ]
+            # Five paid months → five credits, same VS, distinct value dates.
+            self.assertEqual(len(customer_credits), 5)
+            self.assertEqual(len({t.value_date for t in customer_credits}), 5)
+
+            # The final month has no payment and is flagged Unpaid.
+            unpaid = [r for r in recon if r.expected_status == "Unpaid"]
+            self.assertEqual(len(unpaid), 1)
+            self.assertEqual(unpaid[0].expected_reason, "no_payment_found")
+            self.assertEqual(unpaid[0].expected_matched_transaction_count, "0")
+            # No credit exists for the unpaid (June) invoice.
+            june_invoice = next(r for r in rows if r.billing_month == "2026-06")
+            self.assertEqual(june_invoice.payment_scenario, "unpaid")
+
+
     def test_missing_required_columns_fail_clearly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             bad_csv = Path(tmp_dir) / "bad.csv"

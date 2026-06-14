@@ -18,6 +18,9 @@ __pycache__/
 generated_invoices/
 generated_invoices_5/
 generated_invoices_25/
+generated_overdue/
+generated_recurring/
+generated_*/
 bank_statement_*/
 tmp_smoke/
 tmp_smoke_v2/

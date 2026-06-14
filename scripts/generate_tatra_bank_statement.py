@@ -489,6 +489,13 @@ def generate_statement(
                 notes=f"{invoice.payment_scenario} for {invoice.invoice_no}",
             ))
             matched_ids.append(tx_id)
+        elif invoice.payment_scenario == "unpaid":
+            # No transaction at all — the month stays outstanding. Mirrors the
+            # app's "Unpaid · NO_PAYMENT_FOUND" reminder-eligible row.
+            expected_status = "Unpaid"
+            expected_reason = "no_payment_found"
+            expected_action = "send_reminder"
+            expected_received = Decimal("0.00")
         else:
             raise ValueError(f"Unsupported payment scenario: {invoice.payment_scenario}")
 
